@@ -1,0 +1,28 @@
+# Optional local infrastructure. Start with: docker compose --profile infrastructure up -d
+# FastAPI and Next.js run on the host. These ports bind only to loopback.
+services:
+  chroma:
+    image: chromadb/chroma:1.5.9
+    profiles: [infrastructure]
+    ports: ["127.0.0.1:8001:8000"]
+    volumes: ["chroma:/data"]
+  redis:
+    image: redis:7-alpine
+    profiles: [infrastructure]
+    ports: ["127.0.0.1:6379:6379"]
+    volumes: ["redis:/data"]
+    command: ["redis-server", "--appendonly", "yes"]
+  opensearch:
+    image: opensearchproject/opensearch:3.3.2
+    profiles: [infrastructure]
+    environment:
+      discovery.type: single-node
+      DISABLE_SECURITY_PLUGIN: "true"
+      DISABLE_INSTALL_DEMO_CONFIG: "true"
+      OPENSEARCH_JAVA_OPTS: "-Xms512m -Xmx512m"
+    ports: ["127.0.0.1:9200:9200"]
+    volumes: ["opensearch:/usr/share/opensearch/data"]
+volumes:
+  chroma:
+  redis:
+  opensearch:
