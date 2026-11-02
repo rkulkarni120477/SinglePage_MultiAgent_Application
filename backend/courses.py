@@ -65,7 +65,7 @@ class Assessment(StrictModel):
     title: str
     instructions: str = Field(min_length=100)
     objective_ids: list[str] = Field(min_length=1)
-    questions: list[Question] = Field(min_length=1,max_length=6)
+    questions: list[Question] = Field(default_factory=list,max_length=10)
     rubric: list[Rubric] = Field(min_length=3,max_length=6)
     pass_rule: str = Field(min_length=30)
 
@@ -85,7 +85,7 @@ class CoursePlan(StrictModel):
     prerequisites: list[str] = Field(min_length=1)
     equipment: list[str] = Field(min_length=1)
     safety_notes: list[str] = Field(min_length=2)
-    objectives: list[Objective] = Field(min_length=3,max_length=8)
+    objectives: list[Objective] = Field(min_length=3,max_length=20)
     lessons: list[LessonSpec] = Field(min_length=3,max_length=4)
     assessments: list[Assessment] = Field(min_length=2,max_length=3)
     alignment: list[Alignment] = Field(min_length=3,max_length=16)
@@ -184,6 +184,8 @@ def validate_plan(plan, sources):
                 raise ValueError(f"Alignment {row['standard_code']} references objectives {row['objective_ids']} but its {kind} {row[field]} only cover {sorted(covered)}. Correct the row or referenced objective_ids so the mapping is taught AND assessed.")
     if not any(r['safety_critical'] for a in plan['assessments'] for r in a['rubric']):
         raise ValueError('Missing safety-critical assessment criterion')
+    if sum(len(a['questions']) for a in plan['assessments'])<3:
+        raise ValueError('Include at least three written questions with model answers across the course assessments. Practical assessments can use instructions and rubrics without questions.')
 
 
 def build(run, data):
@@ -206,7 +208,8 @@ def build(run, data):
         'Author original explanations and assessment rubrics; do not copy a handbook wholesale. '
         'Produce exactly three substantial lessons on electrical safety, circuit inspection, and fault diagnosis. '
         'Use only the provided ACS codes for proposed alignment. Include a written assessment with at least three questions '
-        'and a supervised practical assessment. For EVERY assessment, include questions with model_answer, at least THREE rubric criteria, '
+        'and a supervised practical assessment. Include model_answer for every question. Practical assessments may have an empty questions array. '
+        'For EVERY assessment, include at least THREE rubric criteria, '
         'and objective_ids, instructions, and pass_rule. Create observable rubric levels: 0 not yet, 1 meets, 2 exceeds. '
         'Pass rules must require every criterion to meet level 1 and all safety-critical criteria to pass, with remediation on failure. '
         'Use de-energized training rigs, current manufacturer data for aircraft-specific limits, and instructor-controlled tests. '

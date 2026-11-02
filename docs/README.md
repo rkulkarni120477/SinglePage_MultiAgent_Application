@@ -47,15 +47,13 @@ Each selected specialist makes one Bedrock Converse request before human review.
 
 Use `MODEL_PROVIDER=deterministic` explicitly for an offline demo. Tests select this mode and mock Bedrock for generation coverage. Old saved runs retain their original outputs; start a new workflow to generate model drafts.
 
-## Verification
-
-### Generate a deliverable FAA course
+## Generate a deliverable FAA course
 
 For an aviation electrical-maintenance workflow containing a content blueprint, approve the source workflow, then select **Generate FAA course** beneath its artifacts. This works with existing saved workflow JSON, including older template runs that contain the original brief.
 
 The backend downloads the official FAA-S-ACS-1 ACS and FAA-H-8083-30B General handbook from fixed FAA URLs and caches them under `data/reference_sources/`. It extracts selected electrical requirements and relevant handbook pages, preserving source URLs, edition, download time, PDF page numbers, printed page labels and SHA-256 hashes. The initial handbook download is approximately 93 MB; subsequent builds reuse the cached sources and extracts. Cached PDFs are retained until manually refreshed; source editions are recorded rather than silently claimed to be the latest.
 
-Bedrock generates a course plan, assessments, observable scoring rubrics, proposed alignment rows and three full lessons. Schema checks reject incomplete output, invented ACS codes, broken objective/lesson/assessment references, unknown citation pages, missing safety-critical rubric criteria and short lesson content. A schema-invalid plan can receive up to two model repair requests, and an invalid lesson can receive one; successful course usage totals include those requests. Generation still fails if validation cannot be satisfied, with no template fallback. These checks do not establish factual correctness: an instructor must review the source-linked full preview, practical activities, answer keys and mappings. The scope is selected aviation electrical fundamentals, not all A&P standards or FAA approval. Missing selected mappings are listed explicitly.
+Bedrock generates a course plan, assessments, observable scoring rubrics, proposed alignment rows and three full lessons. Full-course authoring defaults to `amazon.nova-pro-v1:0`; configure `BEDROCK_COURSE_MODEL_ID` to override it. The short workflow specialists continue using `BEDROCK_MODEL_ID`. Schema checks reject incomplete output, invented ACS codes, broken objective/lesson/assessment references, unknown citation pages, missing safety-critical rubric criteria and short lesson content. A schema-invalid plan can receive up to two model repair requests, and an invalid lesson can receive one; successful course usage totals include those requests. Generation still fails if validation cannot be satisfied, with no template fallback. These checks do not establish factual correctness: an instructor must review the source-linked full preview, practical activities, answer keys and mappings. The scope is selected aviation electrical fundamentals, not all A&P standards or FAA approval. Missing selected mappings are listed explicitly.
 
 The new course has its own review state. Choose **Review full lessons, answers & rubrics**, review it, then **Approve course** and **Download course ZIP**. The ZIP includes:
 
@@ -68,6 +66,8 @@ The new course has its own review state. Choose **Review full lessons, answers &
 The ZIP includes instructor answers; distribute learner material separately. It is a portable browser-readable course package, not a SCORM package or LMS integration. Rejection or regeneration does not alter the approved source workflow. Reopen the workflow in Run history to retrieve its latest saved course draft.
 
 API: `POST /api/v1/runs/{id}/course`, `GET /api/v1/runs/{id}/course`, `POST /api/v1/courses/{id}/review`, `GET /api/v1/courses/{id}/preview`, and approval-gated `GET /api/v1/courses/{id}/export`.
+
+## Verification
 
 ```powershell
 python -m unittest backend.test_platform -v
@@ -84,7 +84,7 @@ Model generation is connected through Amazon Bedrock; model drafts and new mappi
 
 Optional Chroma adapter: `docker compose --profile infrastructure up -d`, set `CHROMA_HOST=127.0.0.1`, restart FastAPI, then POST `/api/v1/projections/rebuild` and GET `/api/v1/projections/search?q=safety`. This projection uses explicit deterministic lexical hash vectors; replace them with a configured embedding model for semantic retrieval. Chroma is derived, never canonical. Infrastructure containers and this adapter require separate integration validation on your Docker environment.
 
-Redis and OpenSearch are provisioned as optional local services but are **not wired** into workflow execution. Celery workers, hybrid ranking, outbox/retry processing, Entra/MSAL authentication, additional model providers, document uploads/OCR, cancellation, budgets, telemetry, immutable audit storage, migrations and full lifecycle/retraction/purge are production backlog. Runs execute synchronously with bounded local inputs; the event endpoint emits a snapshot, not live worker progress. Do not expose this reference build as a hosted production platform.
+Redis and OpenSearch are provisioned as optional local services but are **not wired** into workflow execution. Celery workers, hybrid ranking, outbox/retry processing, Entra/MSAL authentication, additional model providers, document uploads/OCR, cancellation, budgets, telemetry, immutable audit storage, migrations and full lifecycle/retraction/purge are production backlog. Runs and course builds execute synchronously with bounded local inputs; the Next.js API proxy permits up to 15 minutes for these local generation requests; the event endpoint emits a snapshot, not live worker progress. Do not expose this reference build as a hosted production platform.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for review decisions, the AIM comparison and delivery plan.
 

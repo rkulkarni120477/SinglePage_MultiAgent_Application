@@ -123,7 +123,7 @@ class PlatformTests(unittest.IsolatedAsyncioTestCase):
             prerequisites=['Basic arithmetic'],equipment=['De-energized training rig'],safety_notes=['Qualified instructor required','Follow applicable maintenance instructions'],
             objectives=objectives,lessons=[dict(id=f'L{i}',title=f'Lesson {i}',duration_minutes=60,objective_ids=[f'O{i}']) for i in range(1,4)],
             assessments=[dict(id=f'A{i}',title=f'Assessment {i}',instructions='Demonstrate circuit inspection on a de-energized training rig under instructor supervision. '*2,
-                objective_ids=[o['id'] for o in objectives],questions=[question],rubric=rubric,pass_rule='Every criterion must meet level 1, including all safety-critical criteria; remediate before retry.') for i in range(1,3)],
+                objective_ids=[o['id'] for o in objectives],questions=[question,question],rubric=rubric,pass_rule='Every criterion must meet level 1, including all safety-critical criteria; remediate before retry.') for i in range(1,3)],
             alignment=[dict(standard_code='AM.I.A.S1',objective_ids=[f'O{i}'],lesson_ids=[f'L{i}'],assessment_ids=['A1','A2'],rationale='Supervised continuity practice and observed assessment provide evidence for this element.') for i in range(1,4)],out_of_scope=['Full A&P certification'])
         sources=dict(manifest=[dict(id='faa-acs',title='FAA ACS',version='2021',url='https://www.faa.gov/example.pdf',sha256='test-hash',downloaded_at='2026-11-02')],
             pages=[dict(id='faa-acs:7',pdf_page=7,printed_page='2',text='Official test source')],
