@@ -13,7 +13,7 @@ from typing import TypedDict
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, Response, HTMLResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import Column, String, Text, create_engine, event, select
 from sqlalchemy.orm import Session, declarative_base
@@ -24,6 +24,7 @@ from langgraph.checkpoint.sqlite import SqliteSaver
 from .catalog import AGENTS, USE_CASES
 from . import projections
 from . import models
+from . import courses
 
 load_dotenv(Path(__file__).resolve().parent / '.env', override=False)
 
@@ -188,6 +189,43 @@ def export_run(id:str):
     run=get(id,'run')
     if run['status']!='approved': raise HTTPException(409,'Approve the run before exporting')
     return run
+
+@app.get('/api/v1/runs/{id}/course')
+def latest_course(id:str):
+    get(id,'run')
+    values=sorted([c for c in records('course') if c['run_id']==id],key=lambda c:c['created_at'],reverse=True)
+    return values[0] if values else None
+
+@app.post('/api/v1/runs/{id}/course')
+def build_course(id:str):
+    run=get(id,'run')
+    if run['status']!='approved': raise HTTPException(409,'Approve the source workflow before generating a course.')
+    content=courses.build(run,DATA)
+    with lock:
+        value=save('course',dict(id=str(uuid.uuid4()),run_id=id,created_at=now(),status='awaiting_review',framework='FAA-S-ACS-1',content=content))
+        audit('course.created',value['id'])
+        return value
+
+@app.post('/api/v1/courses/{id}/review')
+def review_course(id:str,body:Decision):
+    if body.decision not in ('approve','reject'): raise HTTPException(422,'Expected approve or reject')
+    with lock:
+        value=get(id,'course')
+        if value['status']!='awaiting_review': raise HTTPException(409,'Course already reviewed')
+        value.update(status='approved' if body.decision=='approve' else 'rejected',reviewed_at=now(),reviewer='local-reviewer')
+        audit('course.'+body.decision,id)
+        return save('course',value)
+
+@app.get('/api/v1/courses/{id}/preview',response_class=HTMLResponse)
+def preview_course(id:str):
+    return courses.html_document(get(id,'course'),instructor=True)
+
+@app.get('/api/v1/courses/{id}/export')
+def export_course(id:str):
+    value=get(id,'course')
+    if value['status']!='approved': raise HTTPException(409,'Review and approve the generated course before downloading.')
+    return Response(courses.export_zip(value,get(value['run_id'],'run')),media_type='application/zip',
+        headers={'Content-Disposition':f'attachment; filename="faa-course-{id[:8]}.zip"'})
 @app.get('/api/v1/runs/{id}/events')
 def events(id:str):
     value=get(id,'run')

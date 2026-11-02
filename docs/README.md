@@ -49,6 +49,26 @@ Use `MODEL_PROVIDER=deterministic` explicitly for an offline demo. Tests select 
 
 ## Verification
 
+### Generate a deliverable FAA course
+
+For an aviation electrical-maintenance workflow containing a content blueprint, approve the source workflow, then select **Generate FAA course** beneath its artifacts. This works with existing saved workflow JSON, including older template runs that contain the original brief.
+
+The backend downloads the official FAA-S-ACS-1 ACS and FAA-H-8083-30B General handbook from fixed FAA URLs and caches them under `data/reference_sources/`. It extracts selected electrical requirements and relevant handbook pages, preserving source URLs, edition, download time, PDF page numbers, printed page labels and SHA-256 hashes. The initial handbook download is approximately 93 MB; subsequent builds reuse the cached sources and extracts. Cached PDFs are retained until manually refreshed; source editions are recorded rather than silently claimed to be the latest.
+
+Bedrock generates a course plan, assessments, observable scoring rubrics, proposed alignment rows and three full lessons. Schema checks reject incomplete output, invented ACS codes, broken objective/lesson/assessment references, unknown citation pages, missing safety-critical rubric criteria and short lesson content. A schema-invalid plan can receive up to two model repair requests, and an invalid lesson can receive one; successful course usage totals include those requests. Generation still fails if validation cannot be satisfied, with no template fallback. These checks do not establish factual correctness: an instructor must review the source-linked full preview, practical activities, answer keys and mappings. The scope is selected aviation electrical fundamentals, not all A&P standards or FAA approval. Missing selected mappings are listed explicitly.
+
+The new course has its own review state. Choose **Review full lessons, answers & rubrics**, review it, then **Approve course** and **Download course ZIP**. The ZIP includes:
+
+- `index.html`: learner lessons, activities, questions and scoring expectations.
+- `instructor.html`: the course plus suggested answers and instructor guidance.
+- `alignment-matrix.csv` and `assessment-rubrics.csv`: editable review tables.
+- `course.json` and `workflow.json`: generated course and original workflow records.
+- `sources/manifest.json` and `sources/extracted-pages.json`: provenance and downloaded source excerpts. Full FAA PDFs remain available through their official links.
+
+The ZIP includes instructor answers; distribute learner material separately. It is a portable browser-readable course package, not a SCORM package or LMS integration. Rejection or regeneration does not alter the approved source workflow. Reopen the workflow in Run history to retrieve its latest saved course draft.
+
+API: `POST /api/v1/runs/{id}/course`, `GET /api/v1/runs/{id}/course`, `POST /api/v1/courses/{id}/review`, `GET /api/v1/courses/{id}/preview`, and approval-gated `GET /api/v1/courses/{id}/export`.
+
 ```powershell
 python -m unittest backend.test_platform -v
 npm run build

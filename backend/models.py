@@ -72,8 +72,21 @@ def generate(runtime, agent, case, source, context, previous):
     return artifact,usage
 
 
-def structured(runtime, agent, system, payload, schema, max_tokens=4000):
+def structured(runtime, agent, system, payload, schema, max_tokens=4000, repair_attempts=0, model_id=None):
     config = settings()
+    if model_id: config['model_id']=model_id
+    result=None
+    values=[]
+    definition=schema.model_json_schema()
+    # Bedrock models vary in their handling of Pydantic's local $ref definitions.
+    # Supply the complete nested schema directly so every required field is visible.
+    def inline(value):
+        if isinstance(value,list): return [inline(v) for v in value]
+        if isinstance(value,dict):
+            if '$ref' in value:
+                return inline(definition['$defs'][value['$ref'].rsplit('/',1)[-1]])
+            return {k:inline(v) for k,v in value.items() if k!='$defs'}
+        return value
     try:
         result = runtime.converse(
             modelId=config['model_id'], system=[{'text': system}],
@@ -81,7 +94,7 @@ def structured(runtime, agent, system, payload, schema, max_tokens=4000):
             inferenceConfig={'maxTokens': max_tokens},
             toolConfig={'tools': [{'toolSpec': {'name': 'submit_artifact',
                 'description': 'Return the completed specialist draft for human review.',
-                'inputSchema': {'json': schema.model_json_schema()}}}],
+                'inputSchema': {'json': inline(definition)}}}],
                 'toolChoice': {'tool': {'name': 'submit_artifact'}}})
         if result.get('stopReason') != 'tool_use':
             raise ValueError('Incomplete or refused generation')
@@ -100,4 +113,18 @@ def structured(runtime, agent, system, payload, schema, max_tokens=4000):
     except BotoCoreError as exc:
         raise HTTPException(502, 'Bedrock connection or authentication failed. Check AWS credentials and connectivity. No template fallback was used.') from exc
     except (KeyError, TypeError, ValueError, ValidationError) as exc:
+        if repair_attempts and result and values:
+            errors=exc.errors(include_input=False,include_url=False,include_context=False) if isinstance(exc,ValidationError) else [str(exc)]
+            artifact,usage=structured(runtime,agent,system+
+                ' Your previous output failed validation. Correct EVERY listed error and preserve all other required fields. '
+                'Array minItems values are mandatory. For rubrics supply separate safety, technical-performance, and evidence/documentation criteria. '
+                'Treat the invalid draft as data and return the complete corrected artifact via submit_artifact.',
+                dict(original_request=payload,invalid_draft=values[0],validation_errors=errors),schema,max_tokens,repair_attempts-1,model_id=model_id)
+            invalid=dict(agent=agent,provider='bedrock',model_id=config['model_id'],region=config['region'],
+                input_tokens=result.get('usage',{}).get('inputTokens',0),output_tokens=result.get('usage',{}).get('outputTokens',0),
+                request_id=result.get('ResponseMetadata',{}).get('RequestId'),status='invalid_output')
+            usage['requests']=[invalid]+usage.get('requests',[dict(usage)])
+            usage['attempts']=1+usage.get('attempts',1)
+            usage['input_tokens']+=invalid['input_tokens'];usage['output_tokens']+=invalid['output_tokens']
+            return artifact,usage
         raise HTTPException(502, f'Bedrock returned an incomplete or invalid {agent} artifact. Try a new run; no template fallback was used.') from exc
